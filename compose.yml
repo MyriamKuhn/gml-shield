@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: gml-shield-api:dev
+    ports:
+      - "127.0.0.1:8000:80"
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+      - laravel_storage:/var/www/html/storage
+      - laravel_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  db:
+    image: postgres:18.2-trixie
+    environment:
+      POSTGRES_DB: gml_shield
+      POSTGRES_USER: gml_shield
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD in the root .env file}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gml_shield -d gml_shield"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  front:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: gml-shield-front:dev
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  laravel_storage:
+  laravel_cache:
