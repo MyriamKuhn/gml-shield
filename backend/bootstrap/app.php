@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API-only authentication: do not redirect guests to a missing login page.
+        $middleware->redirectGuestsTo(null);
+
         // Enable Sanctum's session-based authentication for our React SPA.
         $middleware->statefulApi();
 
@@ -28,6 +31,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn(Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn(Request $request) => $request->is('api/*')
+                || $request->is('docs/api')
+                || $request->is('docs/api.json')
+                || $request->expectsJson(),
         );
     })->create();
