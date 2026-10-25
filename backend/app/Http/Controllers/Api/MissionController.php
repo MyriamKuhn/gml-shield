@@ -38,6 +38,11 @@ class MissionController extends Controller
             $query->where('driver_id', $user->id);
         }
 
+        // Dispatchers only see missions they created.
+        if ($user->role === UserRole::DISPATCHER) {
+            $query->where('created_by', $user->id);
+        }
+
         // Return the most recently scheduled missions first.
         $missions = $query
             ->orderByDesc('scheduled_at')
@@ -162,6 +167,33 @@ class MissionController extends Controller
         ]);
 
         return response()->json($updatedMission);
+    }
+
+    /**
+     * Update the mission status through the Studi API contract.
+     *
+     * Reuse the existing authorized lifecycle operations
+     * to preserve locking and transition rules.
+     */
+    public function updateStatus(
+        Request $request,
+        Mission $mission
+    ): JsonResponse {
+        $validated = $request->validate([
+            'status' => [
+                'required',
+                'string',
+                'in:IN_PROGRESS,COMPLETED',
+            ],
+        ]);
+
+        return match ($validated['status']) {
+            MissionStatus::IN_PROGRESS->value =>
+                $this->start($request, $mission),
+
+            MissionStatus::COMPLETED->value =>
+                $this->complete($request, $mission),
+        };
     }
 
     /**

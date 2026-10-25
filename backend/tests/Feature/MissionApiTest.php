@@ -12,13 +12,18 @@ class MissionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Create an active user with the specified role.
+     *
+     * Tests requiring a disabled account must explicitly
+     * set is_active to false.
+     */
     private function userWithRole(UserRole $role): User
     {
-        $user = User::factory()->create();
-        $user->role = $role;
-        $user->save();
-
-        return $user;
+        return User::factory()->create([
+            'role' => $role,
+            'is_active' => true,
+        ]);
     }
 
     private function createMission(
@@ -485,7 +490,9 @@ class MissionApiTest extends TestCase
             'GML-START-001'
         );
 
-        $this->patchJson("/api/missions/{$mission->id}/start", [])
+        $this->patchJson("/api/missions/{$mission->id}/status", [
+            'status' => 'IN_PROGRESS',
+        ])
             ->assertUnauthorized();
 
         $this->assertSame(
@@ -506,7 +513,9 @@ class MissionApiTest extends TestCase
         );
 
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertOk()
             ->assertJsonPath('status', 'IN_PROGRESS')
             ->assertJsonPath('driver_id', $driver->id);
@@ -530,7 +539,9 @@ class MissionApiTest extends TestCase
         );
 
         $this->actingAs($otherDriver)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -552,11 +563,15 @@ class MissionApiTest extends TestCase
         );
 
         $this->actingAs($dispatcher)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertForbidden();
 
         $this->actingAs($admin)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -578,12 +593,16 @@ class MissionApiTest extends TestCase
 
         // First start succeeds.
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertOk();
 
         // Second start must be rejected.
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/start", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -606,7 +625,9 @@ class MissionApiTest extends TestCase
         $mission->status = \App\Enums\MissionStatus::IN_PROGRESS;
         $mission->save();
 
-        $this->patchJson("/api/missions/{$mission->id}/complete", [])
+        $this->patchJson("/api/missions/{$mission->id}/status", [
+            'status' => 'COMPLETED',
+        ])
             ->assertUnauthorized();
 
         $this->assertSame(
@@ -630,7 +651,9 @@ class MissionApiTest extends TestCase
         $mission->save();
 
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertOk()
             ->assertJsonPath('status', 'COMPLETED')
             ->assertJsonPath('driver_id', $driver->id);
@@ -657,7 +680,9 @@ class MissionApiTest extends TestCase
         $mission->save();
 
         $this->actingAs($otherDriver)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -682,11 +707,15 @@ class MissionApiTest extends TestCase
         $mission->save();
 
         $this->actingAs($dispatcher)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertForbidden();
 
         $this->actingAs($admin)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -707,7 +736,9 @@ class MissionApiTest extends TestCase
         );
 
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -732,12 +763,16 @@ class MissionApiTest extends TestCase
 
         // First completion succeeds.
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertOk();
 
         // Second completion is forbidden.
         $this->actingAs($driver)
-            ->patchJson("/api/missions/{$mission->id}/complete", [])
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
             ->assertForbidden();
 
         $this->assertSame(
@@ -1030,5 +1065,167 @@ class MissionApiTest extends TestCase
             ->assertJsonValidationErrors(['reference']);
 
         $this->assertSame('GML-UPDATE-009', $second->fresh()->reference);
+    }
+
+    /**
+     * A disabled driver cannot be assigned to a mission.
+     */
+    public function test_cannot_assign_disabled_driver(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+
+        $driver = $this->userWithRole(UserRole::DRIVER);
+        $driver->is_active = false;
+        $driver->save();
+
+        $mission = $this->createMission(
+            $dispatcher,
+            null,
+            'GML-DISABLED-001'
+        );
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $driver->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['driver_id']);
+
+        $this->assertNull($mission->fresh()->driver_id);
+    }
+
+    /**
+     * Dispatchers cannot list or view missions created by others.
+     */
+    public function test_dispatcher_cannot_access_other_dispatcher_missions(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $otherDispatcher = $this->userWithRole(UserRole::DISPATCHER);
+
+        $ownMission = $this->createMission(
+            $dispatcher,
+            null,
+            'GML-ISOLATION-001'
+        );
+
+        $otherMission = $this->createMission(
+            $otherDispatcher,
+            null,
+            'GML-ISOLATION-002'
+        );
+
+        $this->actingAs($dispatcher)
+            ->getJson('/api/missions')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $ownMission->id)
+            ->assertDontSee($otherMission->reference);
+
+        $this->actingAs($dispatcher)
+            ->getJson("/api/missions/{$otherMission->id}")
+            ->assertForbidden();
+    }
+
+    /**
+     * Dispatchers cannot modify, assign, or cancel
+     * missions belonging to another dispatcher.
+     */
+    public function test_dispatcher_cannot_manage_another_dispatchers_mission(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $otherDispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $otherDispatcher,
+            null,
+            'GML-ISOLATION-003'
+        );
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}", [
+                'title' => 'Modification interdite',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $driver->id,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/cancel", [])
+            ->assertForbidden();
+
+        $mission->refresh();
+
+        $this->assertSame('Mission de test', $mission->title);
+        $this->assertNull($mission->driver_id);
+        $this->assertSame(
+            \App\Enums\MissionStatus::PENDING,
+            $mission->status
+        );
+    }
+
+    /**
+     * The Studi status endpoint must enforce mission transitions.
+     */
+    public function test_studi_status_endpoint_updates_mission_safely(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $driver,
+            'GML-STATUS-001'
+        );
+
+        $this->actingAs($driver)
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'IN_PROGRESS');
+
+        $this->actingAs($driver)
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'COMPLETED');
+
+        $this->assertSame(
+            \App\Enums\MissionStatus::COMPLETED,
+            $mission->fresh()->status
+        );
+    }
+
+    /**
+     * Unauthorized users cannot update another driver's mission.
+     */
+    public function test_studi_status_endpoint_rejects_unauthorized_driver(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $assignedDriver = $this->userWithRole(UserRole::DRIVER);
+        $otherDriver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $assignedDriver,
+            'GML-STATUS-002'
+        );
+
+        $this->actingAs($otherDriver)
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'IN_PROGRESS',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(
+            \App\Enums\MissionStatus::PENDING,
+            $mission->fresh()->status
+        );
     }
 }

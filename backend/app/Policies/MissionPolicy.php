@@ -24,18 +24,20 @@ class MissionPolicy
     }
 
     /**
-     * Managers can view every mission.
-     * Drivers can only view their assigned missions.
+     * Restrict mission access according to role and ownership.
+     *
+     * Administrators can supervise all missions.
+     * Dispatchers can only access their own missions.
+     * Drivers can only access assigned missions.
      */
     public function view(User $user, Mission $mission): bool
     {
-        if (
-            in_array($user->role, [
-                UserRole::ADMIN,
-                UserRole::DISPATCHER,
-            ], true)
-        ) {
+        if ($user->role === UserRole::ADMIN) {
             return true;
+        }
+
+        if ($user->role === UserRole::DISPATCHER) {
+            return $mission->created_by === $user->id;
         }
 
         return $user->role === UserRole::DRIVER
@@ -54,12 +56,20 @@ class MissionPolicy
     }
 
     /**
-     * Only managers can edit pending missions.
+     * Only administrators or the owning dispatcher
+     * can update a pending mission.
      */
     public function update(User $user, Mission $mission): bool
     {
-        return $this->create($user)
-            && $mission->status === MissionStatus::PENDING;
+        if ($mission->status !== MissionStatus::PENDING) {
+            return false;
+        }
+
+        return $user->role === UserRole::ADMIN
+            || (
+                $user->role === UserRole::DISPATCHER
+                && $mission->created_by === $user->id
+            );
     }
 
     /**
@@ -91,15 +101,25 @@ class MissionPolicy
     }
 
     /**
-     * Managers can cancel pending or in-progress missions.
+     * Only administrators or the owning dispatcher
+     * can cancel a pending or in-progress mission.
      */
     public function cancel(User $user, Mission $mission): bool
     {
-        return $this->create($user)
-            && in_array($mission->status, [
+        if (
+            !in_array($mission->status, [
                 MissionStatus::PENDING,
                 MissionStatus::IN_PROGRESS,
-            ], true);
+            ], true)
+        ) {
+            return false;
+        }
+
+        return $user->role === UserRole::ADMIN
+            || (
+                $user->role === UserRole::DISPATCHER
+                && $mission->created_by === $user->id
+            );
     }
 
     /**

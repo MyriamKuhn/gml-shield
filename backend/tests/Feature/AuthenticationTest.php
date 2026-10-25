@@ -28,7 +28,7 @@ class AuthenticationTest extends TestCase
             'password' => Hash::make('SecurePassword123!'),
         ]);
 
-        $this->postJson('/api/login', [
+        $this->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'SecurePassword123!',
         ])
@@ -44,7 +44,7 @@ class AuthenticationTest extends TestCase
             'password' => Hash::make('SecurePassword123!'),
         ]);
 
-        $this->postJson('/api/login', [
+        $this->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'WrongPassword123!',
         ])
@@ -88,13 +88,13 @@ class AuthenticationTest extends TestCase
         ]);
 
         for ($attempt = 1; $attempt <= 5; $attempt++) {
-            $this->postJson('/api/login', [
+            $this->postJson('/api/auth/login', [
                 'email' => $user->email,
                 'password' => 'WrongPassword123!',
             ])->assertUnprocessable();
         }
 
-        $this->postJson('/api/login', [
+        $this->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'WrongPassword123!',
         ])->assertStatus(429);
