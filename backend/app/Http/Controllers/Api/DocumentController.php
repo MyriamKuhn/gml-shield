@@ -164,6 +164,11 @@ class DocumentController extends Controller
         return response()->download(
             $resolvedPath,
             $downloadName,
+            [
+                'Content-Type' => 'application/octet-stream',
+                'Cache-Control' => 'no-store, private',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
         );
     }
 }

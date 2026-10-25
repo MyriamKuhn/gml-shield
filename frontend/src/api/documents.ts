@@ -54,8 +54,9 @@ export async function getMissionDocuments(
 /**
  * Download a delivery proof through the authenticated API.
  *
- * The extension is derived from the response MIME type,
- * while the backend independently controls the download name.
+ * The backend generates the filename and its extension.
+ * Read Content-Disposition to preserve the server-provided name.
+ * Private storage paths are never exposed to the client.
  */
 export async function downloadDeliveryDocument(
   missionId: number,
