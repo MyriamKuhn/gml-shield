@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MissionController;
 use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\DocumentController;
 
 // Public login endpoint with rate limiting.
 Route::post('/auth/login', [AuthController::class, 'login'])
@@ -35,4 +36,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::patch('/missions/{mission}/cancel', [MissionController::class, 'cancel']);
 
     Route::get('/missions/{mission}/secret-code', [MissionController::class, 'revealSecret']);
+
+
+    // Upload delivery proofs by the assigned driver.
+    Route::post('/missions/{mission}/documents', [DocumentController::class, 'store']);
+    // List delivery proof metadata for the owning dispatcher.
+    Route::get('/missions/{mission}/documents', [DocumentController::class, 'index']);
+    // Download a private delivery proof after authorization.
+    Route::get('/missions/{mission}/documents/{document}', [DocumentController::class, 'download']);
+
 });

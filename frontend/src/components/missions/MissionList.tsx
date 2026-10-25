@@ -28,6 +28,8 @@ import type { AuthUser } from '../../api/auth'
 import MissionAssignForm from './MissionAssignForm'
 import MissionEditForm from './MissionEditForm'
 import MissionSecretCode from './MissionSecretCode'
+import MissionDocumentUpload from './MissionDocumentUpload'
+import MissionDocumentsList from './MissionDocumentsList'
 
 const statusLabels: Record<MissionStatus, string> = {
   PENDING: 'En attente',
@@ -173,6 +175,20 @@ export default function MissionList({ user }: MissionListProps) {
     } finally {
       setCompletingMissionId(null)
     }
+  }
+
+  /**
+   * Enable completion after the backend confirms
+   * that a delivery proof has been registered.
+   */
+  function handleDeliveryProofUploaded(missionId: number) {
+    setMissions((currentMissions) =>
+      currentMissions.map((mission) =>
+        mission.id === missionId
+          ? { ...mission, has_delivery_proof: true }
+          : mission
+      )
+    )
   }
 
   /**
@@ -331,6 +347,24 @@ export default function MissionList({ user }: MissionListProps) {
                   />
                 )}
 
+              {user.role === 'DRIVER' &&
+                mission.driver_id === user.id &&
+                mission.status === 'IN_PROGRESS' && (
+                  <MissionDocumentUpload
+                    key={`upload-${mission.id}`}
+                    missionId={mission.id}
+                    onUploadSuccess={() => handleDeliveryProofUploaded(mission.id)}
+                  />
+                )}
+
+              {user.role === 'DISPATCHER' &&
+                mission.created_by === user.id && (
+                  <MissionDocumentsList
+                    key={`documents-${mission.id}`}
+                    missionId={mission.id}
+                  />
+                )}
+
               {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
                 mission.status === 'PENDING' && (
                   <Stack spacing={2}>
@@ -400,18 +434,33 @@ export default function MissionList({ user }: MissionListProps) {
                     )}
 
                     {mission.status === 'IN_PROGRESS' && (
-                      <Button
-                        variant="contained"
-                        color="success"
-                        disabled={
-                          startingMissionId !== null ||
-                          completingMissionId !== null
-                        }
-                        loading={completingMissionId === mission.id}
-                        onClick={() => void handleCompleteMission(mission.id)}
-                      >
-                        Terminer la mission
-                      </Button>
+                      <Stack spacing={1.5} sx={{ width: '100%' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            disabled={
+                              startingMissionId !== null ||
+                              completingMissionId !== null ||
+                              mission.has_delivery_proof !== true
+                            }
+                            loading={completingMissionId === mission.id}
+                            onClick={() => void handleCompleteMission(mission.id)}
+                          >
+                            Terminer la mission
+                          </Button>
+                        </Box>
+
+                        {mission.has_delivery_proof !== true && (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ textAlign: 'right' }}
+                          >
+                            Déposez une preuve de livraison pour pouvoir terminer la mission.
+                          </Typography>
+                        )}
+                      </Stack>
                     )}
                   </Box>
                 )}

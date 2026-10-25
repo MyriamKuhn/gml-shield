@@ -91,13 +91,20 @@ class MissionPolicy
     }
 
     /**
-     * Drivers can complete their own missions in progress.
+     * Only the assigned driver may complete an in-progress mission.
+     *
+     * At least one registered delivery proof is required before
+     * completion, ensuring that the mission remains traceable.
+     *
+     * This is an additional GML-SHIELD business safeguard
+     * complementing the Studi mission lifecycle.
      */
     public function complete(User $user, Mission $mission): bool
     {
         return $user->role === UserRole::DRIVER
             && $mission->driver_id === $user->id
-            && $mission->status === MissionStatus::IN_PROGRESS;
+            && $mission->status === MissionStatus::IN_PROGRESS
+            && $mission->documents()->exists();
     }
 
     /**
@@ -131,6 +138,32 @@ class MissionPolicy
         return $user->role === UserRole::DRIVER
             && $mission->driver_id === $user->id
             && $mission->status === MissionStatus::IN_PROGRESS;
+    }
+
+    /**
+     * Only the assigned driver can upload delivery proofs
+     * while the mission is in progress.
+     *
+     * Proofs must be submitted before mission completion.
+     */
+    public function uploadDocument(User $user, Mission $mission): bool
+    {
+        return $user->role === UserRole::DRIVER
+            && $mission->driver_id === $user->id
+            && $mission->status === MissionStatus::IN_PROGRESS;
+    }
+
+    /**
+     * Only the dispatcher who created the mission
+     * may download its delivery proofs.
+     *
+     * Administrators do not receive automatic access
+     * to sensitive delivery documents.
+     */
+    public function downloadDocument(User $user, Mission $mission): bool
+    {
+        return $user->role === UserRole::DISPATCHER
+            && $mission->created_by === $user->id;
     }
 
     /**

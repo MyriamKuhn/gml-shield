@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Enums\MissionStatus;
 
 class Mission extends Model
@@ -58,5 +59,15 @@ class Mission extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the delivery proof documents associated with this mission.
+     *
+     * A mission can have multiple documents.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
     }
 }
