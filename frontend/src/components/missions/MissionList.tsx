@@ -6,12 +6,18 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Paper,
   Stack,
   Typography,
 } from '@mui/material'
 
 import {
+  cancelMission,
   completeMission,
   getMissions,
   startMission,
@@ -20,6 +26,7 @@ import {
 } from '../../api/missions'
 import type { AuthUser } from '../../api/auth'
 import MissionAssignForm from './MissionAssignForm'
+import MissionEditForm from './MissionEditForm'
 
 const statusLabels: Record<MissionStatus, string> = {
   PENDING: 'En attente',
@@ -55,6 +62,15 @@ export default function MissionList({ user }: MissionListProps) {
 
   // Track the mission currently being completed to prevent duplicate requests.
   const [completingMissionId, setCompletingMissionId] = useState<number | null>(null)
+
+  // Track the mission currently being edited.
+  const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
+
+  // Track the mission selected for cancellation.
+  const [missionToCancel, setMissionToCancel] = useState<Mission | null>(null)
+
+  // Track an ongoing cancellation request.
+  const [cancellingMissionId, setCancellingMissionId] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -174,6 +190,71 @@ export default function MissionList({ user }: MissionListProps) {
     )
   }
 
+  /**
+   * Update the mission list after a successful edit.
+   *
+   * Replace the updated mission in local state and close
+   * the edit form without reloading the page.
+   *
+   * @param updatedMission - The mission returned by the update API.
+   */
+  function handleMissionUpdated(updatedMission: Mission) {
+    setMissions((currentMissions) =>
+      currentMissions.map((mission) =>
+        mission.id === updatedMission.id ? updatedMission : mission
+      )
+    )
+
+    setEditingMissionId(null)
+  }
+
+  /**
+   * Cancel a pending or in-progress mission after confirmation.
+   *
+   * The Laravel API validates the user's permissions and applies
+   * the CANCELLED status while preserving the mission record.
+   *
+   * Update the mission in local state after a successful response.
+   */
+  async function handleCancelMission() {
+    if (!missionToCancel || cancellingMissionId !== null) return
+
+    const missionId = missionToCancel.id
+
+    setCancellingMissionId(missionId)
+    setError('')
+
+    try {
+      const updatedMission = await cancelMission(missionId)
+
+      setMissions((currentMissions) =>
+        currentMissions.map((mission) =>
+          mission.id === missionId ? updatedMission : mission
+        )
+      )
+
+      setMissionToCancel(null)
+
+      if (editingMissionId === missionId) {
+        setEditingMissionId(null)
+      }
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 401) {
+        setError('Votre session a expiré. Veuillez vous reconnecter.')
+      } else if (err instanceof AxiosError && err.response?.status === 403) {
+        setError("Vous n'êtes pas autorisé à annuler cette mission.")
+      } else if (err instanceof AxiosError && err.response?.status === 409) {
+        setError('Cette mission ne peut plus être annulée.')
+      } else {
+        setError("Impossible d'annuler la mission.")
+      }
+
+      setMissionToCancel(null)
+    } finally {
+      setCancellingMissionId(null)
+    }
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -240,6 +321,44 @@ export default function MissionList({ user }: MissionListProps) {
                 Chauffeur : {mission.driver?.name ?? 'Non affecté'}
               </Typography>
 
+              {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
+                mission.status === 'PENDING' && (
+                  <Stack spacing={2}>
+                    {editingMissionId === mission.id ? (
+                      <MissionEditForm
+                        key={mission.id}
+                        mission={mission}
+                        onMissionUpdated={handleMissionUpdated}
+                        onCancel={() => setEditingMissionId(null)}
+                      />
+                    ) : (
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setEditingMissionId(mission.id)}
+                        >
+                          Modifier la mission
+                        </Button>
+                      </Box>
+                    )}
+                  </Stack>
+                )}
+
+              {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
+                (mission.status === 'PENDING' ||
+                  mission.status === 'IN_PROGRESS') && (
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      disabled={cancellingMissionId !== null}
+                      onClick={() => setMissionToCancel(mission)}
+                    >
+                      Annuler la mission
+                    </Button>
+                  </Box>
+                )}
+
               {(
                 user.role === 'ADMIN' ||
                 user.role === 'DISPATCHER'
@@ -289,6 +408,49 @@ export default function MissionList({ user }: MissionListProps) {
             </Stack>
           </Paper>
         ))}
+
+      <Dialog
+        open={missionToCancel !== null}
+        onClose={() => {
+          if (cancellingMissionId === null) {
+            setMissionToCancel(null)
+          }
+        }}
+        aria-labelledby="cancel-mission-dialog-title"
+        aria-describedby="cancel-mission-dialog-description"
+      >
+        <DialogTitle id="cancel-mission-dialog-title">
+          Confirmer l'annulation
+        </DialogTitle>
+
+        <DialogContent>
+          <DialogContentText id="cancel-mission-dialog-description">
+            Voulez-vous vraiment annuler la mission{' '}
+            <strong>{missionToCancel?.reference}</strong> ?
+            Cette opération conservera la mission dans l'historique
+            avec le statut « Annulée ».
+          </DialogContentText>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={() => setMissionToCancel(null)}
+            disabled={cancellingMissionId !== null}
+          >
+            Retour
+          </Button>
+
+          <Button
+            variant="contained"
+            color="error"
+            loading={cancellingMissionId !== null}
+            disabled={cancellingMissionId !== null}
+            onClick={() => void handleCancelMission()}
+          >
+            Confirmer l'annulation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   )
 }

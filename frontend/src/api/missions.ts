@@ -47,6 +47,14 @@ export interface CreateMissionData {
 }
 
 /**
+ * Editable mission fields accepted by the Laravel API.
+ *
+ * Only pending missions can be updated by authorized users.
+ * Status, driver assignment, and creator are managed separately.
+ */
+export type UpdateMissionData = Partial<CreateMissionData>;
+
+/**
  * Laravel's paginated response for GET /api/missions.
  */
 export interface PaginatedMissions {
@@ -132,6 +140,45 @@ export async function assignMission(
   const response = await api.patch<Mission>(
     `/api/missions/${missionId}/assign`,
     { driver_id: driverId },
+  );
+
+  return response.data;
+}
+
+/**
+ * Update the editable fields of a pending mission.
+ *
+ * Laravel validates the submitted fields and verifies that
+ * the authenticated user is authorized to modify the mission.
+ *
+ * @param missionId - The ID of the mission to update.
+ * @param data - The mission fields to modify.
+ * @returns The updated mission returned by the Laravel API.
+ */
+export async function updateMission(
+  missionId: number,
+  data: UpdateMissionData,
+): Promise<Mission> {
+  const response = await api.patch<Mission>(`/api/missions/${missionId}`, data);
+
+  return response.data;
+}
+
+/**
+ * Cancel a pending or in-progress mission.
+ *
+ * The Laravel API verifies that the authenticated user is
+ * authorized to cancel the mission and that its current
+ * status allows the transition to CANCELLED.
+ *
+ * The mission remains stored to preserve traceability.
+ *
+ * @param missionId - The ID of the mission to cancel.
+ * @returns The updated mission returned by the Laravel API.
+ */
+export async function cancelMission(missionId: number): Promise<Mission> {
+  const response = await api.patch<Mission>(
+    `/api/missions/${missionId}/cancel`,
   );
 
   return response.data;
