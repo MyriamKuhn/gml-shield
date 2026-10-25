@@ -19,6 +19,7 @@ import {
   type MissionStatus,
 } from '../../api/missions'
 import type { AuthUser } from '../../api/auth'
+import MissionAssignForm from './MissionAssignForm'
 
 const statusLabels: Record<MissionStatus, string> = {
   PENDING: 'En attente',
@@ -157,6 +158,22 @@ export default function MissionList({ user }: MissionListProps) {
     }
   }
 
+  /**
+   * Update the mission list after a successful driver assignment.
+   *
+   * Replace the updated mission in local state without reloading
+   * the entire list from the Laravel API.
+   *
+   * @param updatedMission - The mission returned by the assignment API.
+   */
+  function handleMissionAssigned(updatedMission: Mission) {
+    setMissions((currentMissions) =>
+      currentMissions.map((mission) =>
+        mission.id === updatedMission.id ? updatedMission : mission
+      )
+    )
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -222,6 +239,17 @@ export default function MissionList({ user }: MissionListProps) {
               <Typography variant="body2" color="text.secondary">
                 Chauffeur : {mission.driver?.name ?? 'Non affecté'}
               </Typography>
+
+              {(
+                user.role === 'ADMIN' ||
+                user.role === 'DISPATCHER'
+              ) &&
+                mission.status === 'PENDING' && (
+                  <MissionAssignForm
+                    mission={mission}
+                    onMissionAssigned={handleMissionAssigned}
+                  />
+                )}
 
               {user.role === 'DRIVER' &&
                 mission.driver_id === user.id &&

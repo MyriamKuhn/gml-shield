@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MissionController;
+use App\Http\Controllers\Api\DriverController;
 
 // Public login endpoint with rate limiting.
 Route::post('/login', [AuthController::class, 'login'])
@@ -16,6 +17,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // List drivers for mission assignment.
+    // Role-based authorization is enforced by DriverController.
+    Route::get('/drivers', [DriverController::class, 'index']);
 });
 
 // Mission management routes — authentication required.

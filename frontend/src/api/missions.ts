@@ -32,6 +32,21 @@ export interface Mission {
 }
 
 /**
+ * Data required to create a new mission.
+ *
+ * The backend manages the initial status, creator, and driver assignment.
+ * These fields must not be submitted during mission creation.
+ */
+export interface CreateMissionData {
+  reference: string;
+  title: string;
+  description?: string | null;
+  pickup_address: string;
+  delivery_address: string;
+  scheduled_at: string;
+}
+
+/**
  * Laravel's paginated response for GET /api/missions.
  */
 export interface PaginatedMissions {
@@ -81,6 +96,43 @@ export async function startMission(id: number): Promise<Mission> {
  */
 export async function completeMission(id: number): Promise<Mission> {
   const response = await api.patch<Mission>(`/api/missions/${id}/complete`);
+
+  return response.data;
+}
+
+/**
+ * Create a mission using the authenticated dispatcher or admin session.
+ *
+ * Laravel validates the submitted data, checks user permissions,
+ * and initializes the mission with the PENDING status.
+ *
+ * @param data - The validated mission creation fields.
+ * @returns The mission created by the Laravel API.
+ */
+export async function createMission(data: CreateMissionData): Promise<Mission> {
+  const response = await api.post<Mission>("/api/missions", data);
+
+  return response.data;
+}
+
+/**
+ * Assign a driver to a pending mission.
+ *
+ * The Laravel API verifies that the authenticated user can assign
+ * the mission and that the selected user has the DRIVER role.
+ *
+ * @param missionId - The ID of the mission to assign.
+ * @param driverId - The ID of the driver receiving the mission.
+ * @returns The updated mission returned by the Laravel API.
+ */
+export async function assignMission(
+  missionId: number,
+  driverId: number,
+): Promise<Mission> {
+  const response = await api.patch<Mission>(
+    `/api/missions/${missionId}/assign`,
+    { driver_id: driverId },
+  );
 
   return response.data;
 }
