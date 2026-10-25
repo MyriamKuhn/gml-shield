@@ -27,6 +27,7 @@ export interface Mission {
   created_by: number;
   driver: Pick<AuthUser, "id" | "name" | "email"> | null;
   creator: Pick<AuthUser, "id" | "name" | "email">;
+  has_delivery_proof?: boolean;
   created_at: string;
   updated_at: string;
 }
