@@ -13,6 +13,9 @@ use App\Http\Requests\AssignMissionRequest;
 use Illuminate\Support\Facades\DB;
 use App\Enums\MissionStatus;
 use App\Http\Requests\UpdateMissionRequest;
+use App\Services\SecretCodeEncryptionService;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\Log;
 
 class MissionController extends Controller
 {
@@ -68,24 +71,73 @@ class MissionController extends Controller
     }
 
     /**
-     * Create a new transport mission.
+     * Reveal the warehouse access code only to the assigned driver.
      *
-     * Authorization and input validation are handled
-     * by StoreMissionRequest.
+     * Never expose cryptographic errors or encrypted values.
      */
-    public function store(StoreMissionRequest $request): JsonResponse
-    {
-        // Only validated business fields can be mass assigned.
-        $mission = new Mission($request->validated());
+    public function revealSecret(
+        Mission $mission,
+        SecretCodeEncryptionService $encryptionService
+    ): JsonResponse {
+        Gate::authorize('revealSecret', $mission);
 
-        // Always identify the creator from the authenticated session.
+        if ($mission->secret_code === null) {
+            return response()->json([
+                'message' => 'No secret code is available for this mission.',
+            ], 404)->header('Cache-Control', 'no-store');
+        }
+
+        try {
+            $secretCode = $encryptionService->decrypt(
+                $mission->secret_code
+            );
+        } catch (DecryptException $exception) {
+            // Log only the affected mission identifier.
+            // Never log the secret or encrypted payload.
+            Log::error('Mission secret decryption failed.', [
+                'mission_id' => $mission->id,
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to retrieve the secret code.',
+            ], 500)->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json([
+            'secret_code' => $secretCode,
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Create a mission and encrypt its warehouse access code
+     * before persisting any sensitive value.
+     */
+    public function store(
+        StoreMissionRequest $request,
+        SecretCodeEncryptionService $encryptionService
+    ): JsonResponse {
+        $validated = $request->validated();
+
+        // Encrypt the secret before constructing the model.
+        // Never store the submitted plaintext.
+        if (array_key_exists('secret_code', $validated)) {
+            $validated['secret_code'] =
+                $encryptionService->encrypt($validated['secret_code']);
+        }
+
+        // Prevent the encrypted field from becoming mass assignable.
+        $encryptedSecret = $validated['secret_code'] ?? null;
+        unset($validated['secret_code']);
+
+        $mission = new Mission($validated);
+
+        // The creator is always determined by the authenticated session.
         $mission->created_by = $request->user()->id;
 
-        // The database provides the initial PENDING status.
-        // No driver is assigned during mission creation.
-        $mission->save();
+        // Only the encrypted representation is persisted.
+        $mission->secret_code = $encryptedSecret;
 
-        // Reload database defaults, including the initial PENDING status.
+        $mission->save();
         $mission->refresh();
 
         $mission->load([

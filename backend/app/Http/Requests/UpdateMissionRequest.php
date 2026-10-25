@@ -65,6 +65,9 @@ class UpdateMissionRequest extends FormRequest
                 'date',
                 'after:now',
             ],
+            'secret_code' => [
+                'prohibited',
+            ],
 
             // Sensitive fields must use dedicated business operations.
             'status' => ['prohibited'],
