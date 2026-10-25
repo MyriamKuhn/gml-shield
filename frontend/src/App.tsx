@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { AxiosError } from 'axios'
 import {
   Alert,
@@ -13,6 +13,8 @@ import {
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
+import MissionList from './components/missions/MissionList'
+import MissionCreateForm from './components/missions/MissionCreateForm'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -21,6 +23,9 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [error, setError] = useState('')
+
+  // Trigger a mission list refresh after a successful creation.
+  const [missionRefreshKey, setMissionRefreshKey] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -41,7 +46,7 @@ function App() {
     }
   }, [])
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setLoading(true)
@@ -146,6 +151,16 @@ function App() {
                     Rôle : {user.role}
                   </Typography>
                 </Box>
+
+                {(user.role === 'ADMIN' || user.role === 'DISPATCHER') && (
+                  <MissionCreateForm
+                    onMissionCreated={() => {
+                      setMissionRefreshKey((currentKey) => currentKey + 1)
+                    }}
+                  />
+                )}
+
+                <MissionList key={missionRefreshKey} user={user} />
 
                 {error && <Alert severity="error">{error}</Alert>}
 
