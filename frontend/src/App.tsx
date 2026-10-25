@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
+import MissionList from './components/missions/MissionList'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -146,6 +147,8 @@ function App() {
                     Rôle : {user.role}
                   </Typography>
                 </Box>
+
+                <MissionList user={user} />
 
                 {error && <Alert severity="error">{error}</Alert>}
 
