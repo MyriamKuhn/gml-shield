@@ -33,4 +33,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::patch('/missions/{mission}/assign', [MissionController::class, 'assign']);
     Route::patch('/missions/{mission}/status', [MissionController::class, 'updateStatus']);
     Route::patch('/missions/{mission}/cancel', [MissionController::class, 'cancel']);
+
+    Route::get('/missions/{mission}/secret-code', [MissionController::class, 'revealSecret']);
 });

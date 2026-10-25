@@ -208,6 +208,7 @@ class MissionApiTest extends TestCase
             'pickup_address' => '10 rue de Paris, Metz',
             'delivery_address' => '20 rue de Lyon, Nancy',
             'scheduled_at' => now()->addDays(7)->toIso8601String(),
+            'secret_code' => 'ENTREPOT-TEST-1234',
         ];
     }
 
