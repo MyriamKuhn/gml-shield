@@ -13,7 +13,6 @@ import {
 } from '@mui/material'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
-import './App.css'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -78,12 +77,41 @@ function App() {
   }
 
   return (
-    <Box className="app-shell">
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        py: { xs: 3, sm: 6 },
+        px: 2,
+        bgcolor: 'background.default',
+      }}
+    >
       <Container maxWidth="sm">
-        <Paper elevation={0} className="auth-card">
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 3, sm: 5 },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 3,
+            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.06)',
+          }}
+        >
           <Stack spacing={3}>
             <Stack spacing={1} sx={{ alignItems: 'center' }}>
-              <Box className="auth-icon">
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
+              >
                 <LockOutlinedIcon fontSize="large" />
               </Box>
 
