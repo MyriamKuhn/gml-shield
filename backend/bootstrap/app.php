@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Http\Request;
+use App\Http\Middleware\EnsureUserIsActive;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,8 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
 
         // Register role-based authorization middleware.
+        // 'role' checks for user roles.
+        // 'active' ensures the user account is active.
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
+            'active' => EnsureUserIsActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

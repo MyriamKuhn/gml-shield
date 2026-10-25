@@ -80,30 +80,24 @@ export async function getMissions(page = 1): Promise<PaginatedMissions> {
 
 /**
  * Start a pending mission assigned to the authenticated driver.
- *
- * The Laravel API verifies that the user is the assigned driver
- * and that the mission can transition from PENDING to IN_PROGRESS.
- *
- * @param id - The ID of the mission to start.
- * @returns The updated mission returned by the Laravel API.
+ * The backend validates the transition and permissions.
  */
 export async function startMission(id: number): Promise<Mission> {
-  const response = await api.patch<Mission>(`/api/missions/${id}/start`);
+  const response = await api.patch<Mission>(`/api/missions/${id}/status`, {
+    status: "IN_PROGRESS",
+  });
 
   return response.data;
 }
 
 /**
  * Complete an in-progress mission assigned to the authenticated driver.
- *
- * The Laravel API verifies that the user is the assigned driver
- * and that the mission can transition from IN_PROGRESS to COMPLETED.
- *
- * @param id - The ID of the mission to complete.
- * @returns The updated mission returned by the Laravel API.
+ * The backend validates the transition and permissions.
  */
 export async function completeMission(id: number): Promise<Mission> {
-  const response = await api.patch<Mission>(`/api/missions/${id}/complete`);
+  const response = await api.patch<Mission>(`/api/missions/${id}/status`, {
+    status: "COMPLETED",
+  });
 
   return response.data;
 }
