@@ -1,121 +1,216 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState, type FormEvent } from 'react'
+import { AxiosError } from 'axios'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    getCurrentUser()
+      .then((currentUser) => {
+        if (active) setUser(currentUser)
+      })
+      .catch(() => {
+        // No authenticated session: display the login form.
+      })
+      .finally(() => {
+        if (active) setCheckingSession(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const authenticatedUser = await login({ email, password })
+      setUser(authenticatedUser)
+      setPassword('')
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 429) {
+        setError('Trop de tentatives. Réessayez dans quelques instants.')
+      } else {
+        setError('Connexion impossible. Vérifiez vos identifiants.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleLogout() {
+    setError('')
+    setLoading(true)
+
+    try {
+      await logout()
+      setUser(null)
+      setPassword('')
+    } catch {
+      setError('La déconnexion a échoué. Veuillez réessayer.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        py: { xs: 3, sm: 6 },
+        px: 2,
+        bgcolor: 'background.default',
+      }}
+    >
+      <Container maxWidth="sm">
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 3, sm: 5 },
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 3,
+            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.06)',
+          }}
         >
-          Count is {count}
-        </button>
-      </section>
+          <Stack spacing={3}>
+            <Stack spacing={1} sx={{ alignItems: 'center' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 64,
+                  height: 64,
+                  borderRadius: 2,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
+              >
+                <LockOutlinedIcon fontSize="large" />
+              </Box>
 
-      <div className="ticks"></div>
+              <Typography
+                variant="h4"
+                component="h1"
+                sx={{ fontWeight: 700 }}
+              >
+                GML-SHIELD
+              </Typography>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+              <Typography sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                Gestion sécurisée des missions de transport
+              </Typography>
+            </Stack>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+            {checkingSession ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress aria-label="Vérification de la session" />
+              </Box>
+            ) : user ? (
+              <Stack spacing={3}>
+                <Alert severity="success">
+                  Vous êtes connecté(e).
+                </Alert>
+
+                <Box>
+                  <Typography variant="h6">
+                    Bienvenue, {user.name}
+                  </Typography>
+                  <Typography color="text.secondary">
+                    Rôle : {user.role}
+                  </Typography>
+                </Box>
+
+                {error && <Alert severity="error">{error}</Alert>}
+
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleLogout}
+                  disabled={loading}
+                  fullWidth
+                >
+                  {loading ? 'Déconnexion...' : 'Se déconnecter'}
+                </Button>
+              </Stack>
+            ) : (
+              <Box component="form" onSubmit={handleLogin}>
+                <Stack spacing={2.5}>
+                  <Typography variant="h6" component="h2">
+                    Connexion
+                  </Typography>
+
+                  <TextField
+                    label="Adresse e-mail"
+                    type="email"
+                    autoComplete="username"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Mot de passe"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    fullWidth
+                  />
+
+                  {error && <Alert severity="error">{error}</Alert>}
+
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    size="large"
+                    disabled={loading}
+                    fullWidth
+                  >
+                    {loading ? 'Connexion...' : 'Se connecter'}
+                  </Button>
+                </Stack>
+              </Box>
+            )}
+
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', textAlign: 'center' }}
+            >
+              GreenMove Logistics — Accès réservé aux utilisateurs autorisés
+            </Typography>
+          </Stack>
+        </Paper>
+      </Container>
+    </Box>
   )
 }
 
