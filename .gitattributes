@@ -1,0 +1,17 @@
+# Normalize text files in Git.
+* text=auto
+
+# Keep configuration and scripts compatible with Linux containers.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Preserve binary files.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
