@@ -62,6 +62,11 @@ class StoreMissionRequest extends FormRequest
             'created_by' => [
                 'prohibited',
             ],
+            'secret_code' => [
+                'required',
+                'string',
+                'max:255',
+            ],
         ];
     }
 }

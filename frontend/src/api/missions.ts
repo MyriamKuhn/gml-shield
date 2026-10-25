@@ -44,6 +44,7 @@ export interface CreateMissionData {
   pickup_address: string;
   delivery_address: string;
   scheduled_at: string;
+  secret_code: string;
 }
 
 /**
@@ -52,7 +53,7 @@ export interface CreateMissionData {
  * Only pending missions can be updated by authorized users.
  * Status, driver assignment, and creator are managed separately.
  */
-export type UpdateMissionData = Partial<CreateMissionData>;
+export type UpdateMissionData = Partial<Omit<CreateMissionData, "secret_code">>;
 
 /**
  * Laravel's paginated response for GET /api/missions.
@@ -176,4 +177,18 @@ export async function cancelMission(missionId: number): Promise<Mission> {
   );
 
   return response.data;
+}
+
+/**
+ * Reveal a warehouse access code for the assigned driver.
+ *
+ * The secret is requested explicitly and must never be
+ * stored in persistent browser storage.
+ */
+export async function revealMissionSecret(missionId: number): Promise<string> {
+  const response = await api.get<{ secret_code: string }>(
+    `/api/missions/${missionId}/secret-code`,
+  );
+
+  return response.data.secret_code;
 }
