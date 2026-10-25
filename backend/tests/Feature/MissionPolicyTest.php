@@ -95,6 +95,10 @@ class MissionPolicyTest extends TestCase
         $this->assertFalse(Gate::forUser($dispatcher)->allows('start', $mission));
     }
 
+    /**
+     * Only the assigned driver can complete a mission
+     * after a delivery proof has been registered.
+     */
     public function test_driver_can_complete_only_own_in_progress_mission(): void
     {
         $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
@@ -107,8 +111,46 @@ class MissionPolicyTest extends TestCase
             MissionStatus::IN_PROGRESS
         );
 
-        $this->assertTrue(Gate::forUser($driver)->allows('complete', $mission));
-        $this->assertFalse(Gate::forUser($otherDriver)->allows('complete', $mission));
+        // Register a delivery proof before completion.
+        $mission->documents()->create([
+            'file_path' => 'delivery-proofs/test-proof.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->assertTrue(
+            Gate::forUser($driver)->allows('complete', $mission)
+        );
+
+        $this->assertFalse(
+            Gate::forUser($otherDriver)->allows('complete', $mission)
+        );
+
+        $this->assertFalse(
+            Gate::forUser($dispatcher)->allows('complete', $mission)
+        );
+    }
+
+    /**
+     * An in-progress mission cannot be completed
+     * without at least one registered delivery proof.
+     */
+    public function test_driver_cannot_complete_mission_without_document(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $driver,
+            MissionStatus::IN_PROGRESS
+        );
+
+        $this->assertFalse(
+            Gate::forUser($driver)->allows('complete', $mission)
+        );
+
+        $this->assertCount(0, $mission->documents);
     }
 
     public function test_completed_mission_cannot_be_modified_or_cancelled(): void

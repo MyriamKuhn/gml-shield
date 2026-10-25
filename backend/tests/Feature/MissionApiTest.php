@@ -651,6 +651,13 @@ class MissionApiTest extends TestCase
         $mission->status = \App\Enums\MissionStatus::IN_PROGRESS;
         $mission->save();
 
+        // Register a delivery proof before completing the mission.
+        $mission->documents()->create([
+            'file_path' => 'delivery-proofs/completion-test.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_at' => now(),
+        ]);
+
         $this->actingAs($driver)
             ->patchJson("/api/missions/{$mission->id}/status", [
                 'status' => 'COMPLETED',
@@ -663,6 +670,40 @@ class MissionApiTest extends TestCase
             \App\Enums\MissionStatus::COMPLETED,
             $mission->fresh()->status
         );
+    }
+
+    /**
+     * Reject mission completion when no delivery proof exists.
+     *
+     * This rule must be enforced by the backend, independently
+     * of the frontend button state.
+     */
+    public function test_driver_cannot_complete_mission_without_proof(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $driver,
+            'GML-COMPLETE-NO-PROOF'
+        );
+
+        $mission->status = \App\Enums\MissionStatus::IN_PROGRESS;
+        $mission->save();
+
+        $this->actingAs($driver)
+            ->patchJson("/api/missions/{$mission->id}/status", [
+                'status' => 'COMPLETED',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(
+            \App\Enums\MissionStatus::IN_PROGRESS,
+            $mission->fresh()->status
+        );
+
+        $this->assertDatabaseCount('documents', 0);
     }
 
     public function test_other_driver_cannot_complete_mission(): void
@@ -761,6 +802,13 @@ class MissionApiTest extends TestCase
 
         $mission->status = \App\Enums\MissionStatus::IN_PROGRESS;
         $mission->save();
+
+        // Register a delivery proof before completing the mission.
+        $mission->documents()->create([
+            'file_path' => 'delivery-proofs/completion-test.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_at' => now(),
+        ]);
 
         // First completion succeeds.
         $this->actingAs($driver)
@@ -1190,6 +1238,13 @@ class MissionApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'IN_PROGRESS');
 
+        // Register a delivery proof before completing the mission.
+        $mission->documents()->create([
+            'file_path' => 'delivery-proofs/completion-test.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_at' => now(),
+        ]);
+
         $this->actingAs($driver)
             ->patchJson("/api/missions/{$mission->id}/status", [
                 'status' => 'COMPLETED',
@@ -1228,5 +1283,46 @@ class MissionApiTest extends TestCase
             \App\Enums\MissionStatus::PENDING,
             $mission->fresh()->status
         );
+    }
+
+    /**
+     * The mission list exposes whether a delivery proof exists,
+     * without revealing private document storage paths.
+     */
+    public function test_driver_mission_list_indicates_delivery_proof_without_exposing_path(): void
+    {
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $driver,
+            'GML-PROOF-INDICATOR-001'
+        );
+
+        // No proof has been uploaded yet.
+        $this->actingAs($driver)
+            ->getJson('/api/missions')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $mission->id,
+                'has_delivery_proof' => false,
+            ]);
+
+        // Register a proof in private storage metadata.
+        $mission->documents()->create([
+            'file_path' => 'delivery-proofs/private-proof.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($driver)
+            ->getJson('/api/missions')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $mission->id,
+                'has_delivery_proof' => true,
+            ])
+            ->assertDontSee('delivery-proofs/private-proof.pdf');
     }
 }

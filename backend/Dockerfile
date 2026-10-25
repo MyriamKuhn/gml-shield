@@ -1,5 +1,8 @@
 FROM php:8.5.12-apache-trixie
 
+# Configure PHP upload limits for delivery proofs.
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
 # Install the system libraries required by Laravel and PostgreSQL.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

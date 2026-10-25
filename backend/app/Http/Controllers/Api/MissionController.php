@@ -34,6 +34,9 @@ class MissionController extends Controller
             ->with([
                 'driver:id,name,email',
                 'creator:id,name,email',
+            ])
+            ->withExists([
+                'documents as has_delivery_proof',
             ]);
 
         // Drivers must only access their assigned missions.
