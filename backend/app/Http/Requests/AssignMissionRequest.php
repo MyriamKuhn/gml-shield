@@ -32,7 +32,8 @@ class AssignMissionRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists('users', 'id')
-                    ->where('role', UserRole::DRIVER->value),
+                    ->where('role', UserRole::DRIVER->value)
+                    ->where('is_active', true),
             ],
         ];
     }

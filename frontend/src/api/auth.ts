@@ -19,7 +19,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthUser> {
   await initializeCsrf();
 
   const response = await api.post<{ user: AuthUser }>(
-    "/api/login",
+    "/api/auth/login",
     credentials,
   );
 

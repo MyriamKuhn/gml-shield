@@ -7,11 +7,11 @@ use App\Http\Controllers\Api\MissionController;
 use App\Http\Controllers\Api\DriverController;
 
 // Public login endpoint with rate limiting.
-Route::post('/login', [AuthController::class, 'login'])
+Route::post('/auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:5,1');
 
 // Protected endpoints requiring authentication.
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -24,14 +24,13 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // Mission management routes — authentication required.
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/missions', [MissionController::class, 'index']);
     Route::post('/missions', [MissionController::class, 'store']);
     Route::patch('/missions/{mission}', [MissionController::class, 'update']);
     Route::get('/missions/{mission}', [MissionController::class, 'show']);
 
     Route::patch('/missions/{mission}/assign', [MissionController::class, 'assign']);
-    Route::patch('/missions/{mission}/start', [MissionController::class, 'start']);
-    Route::patch('/missions/{mission}/complete', [MissionController::class, 'complete']);
+    Route::patch('/missions/{mission}/status', [MissionController::class, 'updateStatus']);
     Route::patch('/missions/{mission}/cancel', [MissionController::class, 'cancel']);
 });
