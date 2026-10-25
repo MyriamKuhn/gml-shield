@@ -24,6 +24,16 @@ class Mission extends Model
     ];
 
     /**
+     * Prevent encrypted warehouse access codes from being
+     * exposed through automatic model serialization.
+     *
+     * Secrets are only revealed through an authorized endpoint.
+     */
+    protected $hidden = [
+        'secret_code',
+    ];
+
+    /**
      * Attribute casting.
      */
     protected function casts(): array

@@ -27,6 +27,7 @@ import {
 import type { AuthUser } from '../../api/auth'
 import MissionAssignForm from './MissionAssignForm'
 import MissionEditForm from './MissionEditForm'
+import MissionSecretCode from './MissionSecretCode'
 
 const statusLabels: Record<MissionStatus, string> = {
   PENDING: 'En attente',
@@ -320,6 +321,15 @@ export default function MissionList({ user }: MissionListProps) {
               <Typography variant="body2" color="text.secondary">
                 Chauffeur : {mission.driver?.name ?? 'Non affecté'}
               </Typography>
+
+              {user.role === 'DRIVER' &&
+                mission.driver_id === user.id &&
+                mission.status === 'IN_PROGRESS' && (
+                  <MissionSecretCode
+                    key={`${user.id}-${mission.id}`}
+                    missionId={mission.id}
+                  />
+                )}
 
               {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
                 mission.status === 'PENDING' && (

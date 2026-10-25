@@ -35,6 +35,7 @@ export default function MissionCreateForm({
   const [pickupAddress, setPickupAddress] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
+  const [secretCode, setSecretCode] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -72,13 +73,15 @@ export default function MissionCreateForm({
       pickup_address: pickupAddress.trim(),
       delivery_address: deliveryAddress.trim(),
       scheduled_at: scheduledDate.toISOString(),
+      secret_code: secretCode.trim(),
     }
 
     if (
       !data.reference ||
       !data.title ||
       !data.pickup_address ||
-      !data.delivery_address
+      !data.delivery_address ||
+      !data.secret_code
     ) {
       setError('Veuillez renseigner tous les champs obligatoires.')
       return
@@ -98,6 +101,7 @@ export default function MissionCreateForm({
       setPickupAddress('')
       setDeliveryAddress('')
       setScheduledAt('')
+      setSecretCode('')
 
       // Notify the parent component about the newly created mission.
       onMissionCreated(mission)
@@ -200,6 +204,24 @@ export default function MissionCreateForm({
           }}
           fullWidth
           disabled={submitting}
+        />
+
+        <TextField
+          label="Code secret d'accès à l'entrepôt"
+          type="password"
+          value={secretCode}
+          onChange={(event) => setSecretCode(event.target.value)}
+          required
+          slotProps={{
+            htmlInput: {
+              maxLength: 255,
+              autoComplete: 'off',
+              spellCheck: false,
+            },
+          }}
+          fullWidth
+          disabled={submitting}
+          helperText="Ce code sera chiffré avant son enregistrement."
         />
 
         <TextField

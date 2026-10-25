@@ -123,6 +123,17 @@ class MissionPolicy
     }
 
     /**
+     * Only the assigned driver may reveal the secret
+     * while the mission is in progress.
+     */
+    public function revealSecret(User $user, Mission $mission): bool
+    {
+        return $user->role === UserRole::DRIVER
+            && $mission->driver_id === $user->id
+            && $mission->status === MissionStatus::IN_PROGRESS;
+    }
+
+    /**
      * Mission deletion is forbidden to preserve traceability.
      */
     public function delete(User $user, Mission $mission): bool

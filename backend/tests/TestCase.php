@@ -11,6 +11,8 @@ abstract class TestCase extends BaseTestCase
     /**
      * Verify the PostgreSQL test database before RefreshDatabase
      * or any other test setup can modify database contents.
+     *
+     * Also configure an ephemeral encryption key for tests.
      */
     protected function setUp(): void
     {
@@ -20,6 +22,8 @@ abstract class TestCase extends BaseTestCase
             $this->refreshApplication();
         }
 
+        // Never allow automated tests to modify
+        // a PostgreSQL database other than gml_shield_test.
         if (config('database.default') === 'pgsql') {
             $environment = app()->environment();
 
@@ -37,6 +41,14 @@ abstract class TestCase extends BaseTestCase
             }
         }
 
+        // Run Laravel's standard test initialization.
         parent::setUp();
+
+        // Generate a fresh 256-bit test encryption key.
+        // The key exists only in memory and is never committed.
+        config()->set(
+            'security.secret_code_key',
+            base64_encode(random_bytes(32))
+        );
     }
 }
