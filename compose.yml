@@ -43,6 +43,55 @@ services:
     networks:
       - internal
 
+  broadcast-worker:
+    image: gml-shield-api:dev
+    command:
+      - php
+      - artisan
+      - queue:work
+      - database
+      - --queue=broadcasts
+      - --sleep=1
+      - --tries=3
+      - --timeout=60
+    working_dir: /var/www/html
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+      - laravel_storage:/var/www/html/storage
+      - laravel_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      db:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+    networks:
+      - internal
+
+  reverb:
+    image: gml-shield-api:dev
+    command:
+      - php
+      - artisan
+      - reverb:start
+      - --host=0.0.0.0
+      - --port=8080
+    working_dir: /var/www/html
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+      - laravel_storage:/var/www/html/storage
+      - laravel_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
   db:
     image: postgres:18.2-trixie
     environment:
