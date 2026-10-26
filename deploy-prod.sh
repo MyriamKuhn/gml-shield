@@ -7,6 +7,7 @@ set -euo pipefail
 
 SOURCE_BRANCH="main"
 TARGET_BRANCH="production"
+RELEASE_BRANCH="release/production-deployment"
 MODE="${1:---dry-run}"
 
 if [[ "$MODE" != "--dry-run" && "$MODE" != "--publish" ]]; then
@@ -127,6 +128,12 @@ fi
 
 git -C "$WORKTREE" diff --cached --stat
 git -C "$WORKTREE" commit -m "Build production from $(git rev-parse --short "$SOURCE_BRANCH")"
-# Push normal : rejete automatiquement si origin/production a bouge.
-git -C "$WORKTREE" push origin HEAD:refs/heads/production
-echo "Branche production publiee. Aucun conteneur K8 modifie."
+
+# Publier sur une branche intermediaire, jamais directement sur production.
+# En cas de branche distante existante, le push normal refusera
+# toute mise a jour non fast-forward.
+git -C "$WORKTREE" push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+
+echo "Branche $RELEASE_BRANCH publiee."
+echo "Creer une Pull Request de $RELEASE_BRANCH vers $TARGET_BRANCH."
+echo "Aucun conteneur K8 modifie."
