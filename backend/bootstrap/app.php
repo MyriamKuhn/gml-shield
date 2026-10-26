@@ -23,6 +23,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Trust the reverse proxy only when explicitly configured.
+        $trustedProxies = env('TRUSTED_PROXIES');
+
+        if ($trustedProxies) {
+            $middleware->trustProxies(
+                at: array_map('trim', explode(',', $trustedProxies))
+            );
+        }
+
         // API-only authentication: do not redirect guests to a missing login page.
         $middleware->redirectGuestsTo(null);
 
