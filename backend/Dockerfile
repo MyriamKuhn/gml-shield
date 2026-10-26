@@ -12,6 +12,7 @@ RUN apt-get update \
         unzip \
     && docker-php-ext-install -j$(nproc) \
         intl \
+        pcntl \
         pdo_pgsql \
         zip \
     && rm -rf /var/lib/apt/lists/*

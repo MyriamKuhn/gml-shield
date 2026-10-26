@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use App\Jobs\RecordAuditLog;
 use Throwable;
 use Illuminate\Auth\Access\AuthorizationException;
+use App\Events\MissionAssigned;
 
 class MissionController extends Controller
 {
@@ -247,7 +248,7 @@ class MissionController extends Controller
     ): JsonResponse {
         $validated = $request->validated();
 
-        $updatedMission = DB::transaction(function () use ($request, $mission, $validated) {
+        $result = DB::transaction(function () use ($request, $mission, $validated) {
             // Lock the mission row until the transaction finishes.
             $lockedMission = Mission::query()
                 ->lockForUpdate()
@@ -257,12 +258,31 @@ class MissionController extends Controller
             Gate::forUser($request->user())
                 ->authorize('assign', $lockedMission);
 
+            // Detect whether the assignment actually changes the driver.
+            $driverChanged = $lockedMission->driver_id !== (int) $validated['driver_id'];
+
             // The Form Request has verified that this user is a DRIVER.
             $lockedMission->driver_id = $validated['driver_id'];
             $lockedMission->save();
 
-            return $lockedMission;
+            return [
+                'mission' => $lockedMission,
+                'driver_changed' => $driverChanged,
+            ];
         });
+
+        $updatedMission = $result['mission'];
+
+        // Notify only when the assignment actually changes.
+        // The event also waits for any enclosing transaction to commit.
+        if ($result['driver_changed']) {
+            MissionAssigned::dispatch(
+                missionId: $updatedMission->id,
+                driverId: $updatedMission->driver_id,
+                title: $updatedMission->title,
+                reference: $updatedMission->reference,
+            );
+        }
 
         $updatedMission->load([
             'driver:id,name,email',
