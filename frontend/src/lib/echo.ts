@@ -14,7 +14,7 @@ const pusher = new Pusher(import.meta.env.VITE_REVERB_APP_KEY, {
   // Reuse the existing Sanctum session and CSRF configuration.
   channelAuthorization: {
     transport: "ajax",
-    endpoint: "http://localhost:8000/api/broadcasting/auth",
+    endpoint: `${api.defaults.baseURL}/api/broadcasting/auth`,
     customHandler: async (params, callback) => {
       try {
         const response = await api.post("/api/broadcasting/auth", {

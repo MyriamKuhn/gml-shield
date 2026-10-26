@@ -63,7 +63,7 @@ export default function AdminDashboard({
 
             <Button
               variant="outlined"
-              href="http://localhost:8000/docs/api"
+              href={`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/docs/api`}
               target="_blank"
               rel="noopener noreferrer"
             >
