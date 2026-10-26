@@ -17,6 +17,32 @@ services:
     networks:
       - internal
 
+  queue-worker:
+    image: gml-shield-api:dev
+    command:
+      - php
+      - artisan
+      - queue:work
+      - database
+      - --queue=audit
+      - --sleep=1
+      - --tries=3
+      - --timeout=60
+    working_dir: /var/www/html
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+      - laravel_storage:/var/www/html/storage
+      - laravel_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    networks:
+      - internal
+
   db:
     image: postgres:18.2-trixie
     environment:

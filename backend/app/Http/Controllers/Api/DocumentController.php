@@ -13,6 +13,9 @@ use RuntimeException;
 use Throwable;
 use App\Models\Document;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Jobs\RecordAuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
@@ -106,6 +109,7 @@ class DocumentController extends Controller
      * Files are retrieved exclusively from private storage.
      */
     public function download(
+        Request $request,
         Mission $mission,
         Document $document
     ): BinaryFileResponse {
@@ -160,6 +164,24 @@ class DocumentController extends Controller
         abort_if($extension === null, 404);
 
         $downloadName = 'delivery-proof-' . $document->id . '.' . $extension;
+
+        // Audit authorized delivery proof downloads without exposing file content.
+        try {
+            RecordAuditLog::dispatch(
+                $request->user()->id,
+                'DELIVERY_PROOF_DOWNLOADED',
+                $request->ip(),
+                now()->toISOString(),
+            );
+        } catch (Throwable $exception) {
+            // Audit failures must not disclose private document information.
+            Log::error('Delivery proof audit dispatch failed.', [
+                'exception_type' => get_class($exception),
+            ]);
+
+            // Do not serve a sensitive document if its audit event cannot be queued.
+            abort(503, 'Document temporarily unavailable.');
+        }
 
         return response()->download(
             $resolvedPath,

@@ -283,7 +283,9 @@ export default function MissionList({ user }: MissionListProps) {
   return (
     <Stack spacing={2}>
       <Typography variant="h6" component="h2">
-        Mes missions
+        {user.role === 'ADMIN'
+          ? 'Missions — supervision'
+          : 'Mes missions'}
       </Typography>
 
       {error && <Alert severity="error">{error}</Alert>}
@@ -333,6 +335,12 @@ export default function MissionList({ user }: MissionListProps) {
               <Typography variant="body2">
                 Arrivée : {mission.delivery_address}
               </Typography>
+
+              {user.role === 'ADMIN' && (
+                <Typography variant="body2" color="text.secondary">
+                  Créée par : {mission.creator?.name ?? 'Utilisateur indisponible'}
+                </Typography>
+              )}
 
               <Typography variant="body2" color="text.secondary">
                 Chauffeur : {mission.driver?.name ?? 'Non affecté'}

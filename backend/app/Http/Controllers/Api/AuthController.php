@@ -7,6 +7,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use App\Jobs\RecordAuditLog;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -26,6 +29,21 @@ class AuthController extends Controller
                 'is_active' => true,
             ])
         ) {
+            try {
+                RecordAuditLog::dispatch(
+                    userId: null,
+                    action: 'LOGIN_FAILED',
+                    ipAddress: $request->ip(),
+                    occurredAt: now()->toDateTimeString(),
+                );
+            } catch (Throwable $exception) {
+                // Never expose credentials or authentication details.
+                // An audit failure must not change the authentication decision.
+                Log::error('Failed login audit dispatch failed.', [
+                    'exception_type' => get_class($exception),
+                ]);
+            }
+
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants fournis sont incorrects.'],
             ]);
