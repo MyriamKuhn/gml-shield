@@ -7,7 +7,7 @@ set -euo pipefail
 
 SOURCE_BRANCH="main"
 TARGET_BRANCH="production"
-RELEASE_BRANCH="release/production-deployment"
+RELEASE_BRANCH="release/frontend-polish"
 MODE="${1:---dry-run}"
 
 if [[ "$MODE" != "--dry-run" && "$MODE" != "--publish" ]]; then
