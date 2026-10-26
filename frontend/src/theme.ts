@@ -33,7 +33,7 @@ export const theme = createTheme({
   },
 
   typography: {
-    fontFamily: ["Inter", "Roboto", "Arial", "sans-serif"].join(","),
+    fontFamily: '"Roboto", Arial, sans-serif',
     h4: {
       fontWeight: 700,
     },
