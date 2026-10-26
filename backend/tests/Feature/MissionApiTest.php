@@ -7,6 +7,8 @@ use App\Models\Mission;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use App\Events\MissionAssigned;
+use Illuminate\Support\Facades\Event;
 
 class MissionApiTest extends TestCase
 {
@@ -478,6 +480,178 @@ class MissionApiTest extends TestCase
             $firstDriver->id,
             $mission->fresh()->driver_id
         );
+    }
+
+    /**
+     * A successful assignment must notify exactly the selected driver.
+     */
+    public function test_successful_assignment_dispatches_mission_assigned(): void
+    {
+        Event::fake([MissionAssigned::class]);
+
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+        $mission = $this->createMission(
+            $dispatcher,
+            null,
+            'GML-NOTIFY-001'
+        );
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $driver->id,
+            ])
+            ->assertOk();
+
+        $this->assertSame($driver->id, $mission->fresh()->driver_id);
+
+        Event::assertDispatched(
+            MissionAssigned::class,
+            function (MissionAssigned $event) use ($mission, $driver): bool {
+                return $event->missionId === $mission->id
+                    && $event->driverId === $driver->id
+                    && $event->title === $mission->title
+                    && $event->reference === $mission->reference;
+            }
+        );
+
+        Event::assertDispatchedTimes(MissionAssigned::class, 1);
+    }
+
+    /**
+     * Reassigning a mission to its current driver
+     * must not send a duplicate notification.
+     */
+    public function test_assigning_same_driver_does_not_dispatch_mission_assigned(): void
+    {
+        Event::fake([MissionAssigned::class]);
+
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $driver,
+            'GML-NOTIFY-SAME-001'
+        );
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $driver->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('driver_id', $driver->id);
+
+        $this->assertSame(
+            $driver->id,
+            $mission->fresh()->driver_id
+        );
+
+        Event::assertNotDispatched(MissionAssigned::class);
+    }
+
+    /**
+     * Reassigning a pending mission must notify the new driver only.
+     */
+    public function test_reassigning_mission_notifies_new_driver(): void
+    {
+        Event::fake([MissionAssigned::class]);
+
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $firstDriver = $this->userWithRole(UserRole::DRIVER);
+        $secondDriver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            $firstDriver,
+            'GML-NOTIFY-REASSIGN-001'
+        );
+
+        $this->actingAs($dispatcher)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $secondDriver->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('driver_id', $secondDriver->id);
+
+        $this->assertSame(
+            $secondDriver->id,
+            $mission->fresh()->driver_id
+        );
+
+        Event::assertDispatched(
+            MissionAssigned::class,
+            function (MissionAssigned $event) use ($mission, $secondDriver): bool {
+                return $event->missionId === $mission->id
+                    && $event->driverId === $secondDriver->id;
+            }
+        );
+
+        Event::assertDispatchedTimes(MissionAssigned::class, 1);
+    }
+
+    /**
+     * An unauthorized assignment must never notify a driver.
+     */
+    public function test_denied_assignment_does_not_dispatch_mission_assigned(): void
+    {
+        Event::fake([MissionAssigned::class]);
+
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+        $mission = $this->createMission(
+            $dispatcher,
+            null,
+            'GML-NOTIFY-002'
+        );
+
+        $this->actingAs($driver)
+            ->patchJson("/api/missions/{$mission->id}/assign", [
+                'driver_id' => $driver->id,
+            ])
+            ->assertForbidden();
+
+        $this->assertNull($mission->fresh()->driver_id);
+
+        Event::assertNotDispatched(MissionAssigned::class);
+    }
+
+    /**
+     * An assignment event must not be dispatched when its
+     * surrounding database transaction is rolled back.
+     */
+    public function test_rolled_back_assignment_does_not_dispatch_mission_assigned(): void
+    {
+        Event::fake([MissionAssigned::class]);
+
+        $dispatcher = $this->userWithRole(UserRole::DISPATCHER);
+        $driver = $this->userWithRole(UserRole::DRIVER);
+
+        $mission = $this->createMission(
+            $dispatcher,
+            null,
+            'GML-NOTIFY-ROLLBACK-001'
+        );
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+
+        try {
+            $mission->driver_id = $driver->id;
+            $mission->save();
+
+            MissionAssigned::dispatch(
+                missionId: $mission->id,
+                driverId: $driver->id,
+                title: $mission->title,
+                reference: $mission->reference,
+            );
+        } finally {
+            \Illuminate\Support\Facades\DB::rollBack();
+        }
+
+        $this->assertNull($mission->fresh()->driver_id);
+
+        Event::assertNotDispatched(MissionAssigned::class);
     }
 
     public function test_guest_cannot_start_mission(): void

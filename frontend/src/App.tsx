@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Container,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -16,6 +17,7 @@ import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
 import MissionList from './components/missions/MissionList'
 import MissionCreateForm from './components/missions/MissionCreateForm'
 import AdminDashboard from './components/admin/AdminDashboard'
+import echo from './lib/echo'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -27,6 +29,7 @@ function App() {
 
   // Trigger a mission list refresh after a successful creation.
   const [missionRefreshKey, setMissionRefreshKey] = useState(0)
+  const [missionNotification, setMissionNotification] = useState('')
 
   useEffect(() => {
     let active = true
@@ -46,6 +49,26 @@ function App() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!user || user.role !== 'DRIVER') {
+      return
+    }
+
+    const channelName = `drivers.${user.id}`
+
+    echo.private(channelName).listen(
+      '.NEW_MISSION',
+      (event: { mission_id: number; title: string; reference: string }) => {
+        setMissionNotification(`Nouvelle mission : ${event.reference}`)
+        setMissionRefreshKey((currentKey) => currentKey + 1)
+      },
+    )
+
+    return () => {
+      echo.leave(channelName)
+    }
+  }, [user])
 
   async function handleLogin(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -232,6 +255,14 @@ function App() {
           </Stack>
         </Paper>
       </Container>
+
+      <Snackbar
+        open={Boolean(missionNotification)}
+        autoHideDuration={6000}
+        onClose={() => setMissionNotification('')}
+        message={missionNotification}
+      />
+
     </Box>
   )
 }
