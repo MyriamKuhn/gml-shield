@@ -16,6 +16,9 @@ use App\Http\Requests\UpdateMissionRequest;
 use App\Services\SecretCodeEncryptionService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\RecordAuditLog;
+use Throwable;
+use Illuminate\Auth\Access\AuthorizationException;
 
 class MissionController extends Controller
 {
@@ -82,7 +85,30 @@ class MissionController extends Controller
         Mission $mission,
         SecretCodeEncryptionService $encryptionService
     ): JsonResponse {
-        Gate::authorize('revealSecret', $mission);
+        try {
+            Gate::authorize('revealSecret', $mission);
+        } catch (AuthorizationException $exception) {
+            // Record denied attempts without exposing the mission secret.
+            try {
+                RecordAuditLog::dispatch(
+                    userId: request()->user()?->id,
+                    action: 'SECRET_CODE_REVEAL_DENIED',
+                    ipAddress: request()->ip(),
+                    occurredAt: now()->toDateTimeString(),
+                );
+            } catch (Throwable $auditException) {
+                // An audit failure must never grant access.
+                // Do not log credentials, secrets or request contents.
+                Log::error('Denied secret access audit dispatch failed.', [
+                    'mission_id' => $mission->id,
+                    'user_id' => request()->user()?->id,
+                    'exception_type' => get_class($auditException),
+                ]);
+            }
+
+            // Preserve the original authorization decision and HTTP status.
+            throw $exception;
+        }
 
         if ($mission->secret_code === null) {
             return response()->json([
@@ -104,6 +130,28 @@ class MissionController extends Controller
             return response()->json([
                 'message' => 'Unable to retrieve the secret code.',
             ], 500)->header('Cache-Control', 'no-store');
+        }
+
+        try {
+            // Audit the revelation before returning the sensitive value.
+            RecordAuditLog::dispatch(
+                userId: request()->user()->id,
+                action: 'SECRET_CODE_REVEALED',
+                ipAddress: request()->ip(),
+                occurredAt: now()->toDateTimeString(),
+            );
+        } catch (Throwable $exception) {
+            // Report the infrastructure failure without logging the secret.
+            Log::error('Secret revelation audit dispatch failed.', [
+                'mission_id' => $mission->id,
+                'user_id' => request()->user()->id,
+                'exception_type' => get_class($exception),
+            ]);
+
+            // Deny access when the audit event cannot be queued.
+            return response()->json([
+                'message' => 'Unable to process this sensitive operation.',
+            ], 503)->header('Cache-Control', 'no-store');
         }
 
         return response()->json([

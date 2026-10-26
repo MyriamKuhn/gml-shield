@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Http\Request;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\AuditRequest;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,6 +21,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Enable Sanctum's session-based authentication for our React SPA.
         $middleware->statefulApi();
+
+        // Audit API requests before authentication and authorization
+        // so rejected attempts can also be recorded.
+        $middleware->api(prepend: [
+            AuditRequest::class,
+        ]);
 
         // Register role-based authorization middleware.
         // 'role' checks for user roles.
