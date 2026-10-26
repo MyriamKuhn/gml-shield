@@ -1,0 +1,15 @@
+gml-shield.mkcodecreations.dev {
+    @reverb path /app /app/* /apps /apps/*
+    handle @reverb {
+        reverse_proxy gml-shield-reverb:8080
+    }
+
+    @laravel path /api /api/* /sanctum/* /docs/api /docs/api.json /up
+    handle @laravel {
+        reverse_proxy gml-shield-api:80
+    }
+
+    handle {
+        reverse_proxy gml-shield-front:8080
+    }
+}

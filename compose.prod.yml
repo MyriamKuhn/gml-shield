@@ -1,0 +1,105 @@
+name: gml-shield
+
+x-backend: &backend
+  image: gml-shield-api:prod
+  env_file:
+    - ./deploy/backend.env
+  restart: unless-stopped
+  volumes:
+    - laravel_storage:/var/www/html/storage
+    - laravel_cache:/var/www/html/bootstrap/cache
+  networks:
+    - private
+
+services:
+  api:
+    <<: *backend
+    build:
+      context: ./backend
+      dockerfile: ../deploy/Dockerfile.api
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      private:
+      proxy:
+        aliases:
+          - gml-shield-api
+
+  queue-worker:
+    <<: *backend
+    user: "33:33"
+    command: ["php", "artisan", "queue:work", "database", "--queue=audit", "--sleep=1", "--tries=3", "--timeout=60"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  broadcast-worker:
+    <<: *backend
+    user: "33:33"
+    command: ["php", "artisan", "queue:work", "database", "--queue=broadcasts", "--sleep=1", "--tries=3", "--timeout=60"]
+    depends_on:
+      db:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+
+  reverb:
+    <<: *backend
+    user: "33:33"
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      private:
+      proxy:
+        aliases:
+          - gml-shield-reverb
+
+  db:
+    image: postgres:18.2-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gml_shield
+      POSTGRES_USER: gml_shield
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the K8 root .env file}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gml_shield -d gml_shield"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+
+  front:
+    build:
+      context: ./frontend
+      dockerfile: ../deploy/Dockerfile.front
+      args:
+        VITE_API_URL: https://gml-shield.mkcodecreations.dev
+        VITE_REVERB_APP_KEY: ${VITE_REVERB_APP_KEY:?Set VITE_REVERB_APP_KEY in the K8 root .env file}
+        VITE_REVERB_HOST: gml-shield.mkcodecreations.dev
+        VITE_REVERB_PORT: '443'
+        VITE_REVERB_SCHEME: https
+    image: gml-shield-front:prod
+    restart: unless-stopped
+    networks:
+      proxy:
+        aliases:
+          - gml-shield-front
+
+networks:
+  private:
+    internal: true
+  proxy:
+    external: true
+
+volumes:
+  postgres_data:
+  laravel_storage:
+  laravel_cache:
