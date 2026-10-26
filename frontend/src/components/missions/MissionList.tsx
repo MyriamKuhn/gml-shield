@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+
+import { useEffect, useRef, useState } from 'react'
 import { AxiosError } from 'axios'
 import {
   Alert,
@@ -11,10 +12,20 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
+  LinearProgress,
   Paper,
   Stack,
   Typography,
 } from '@mui/material'
+
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined'
+import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import EventOutlinedIcon from '@mui/icons-material/EventOutlined'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 
 import {
   cancelMission,
@@ -24,6 +35,7 @@ import {
   type Mission,
   type MissionStatus,
 } from '../../api/missions'
+
 import type { AuthUser } from '../../api/auth'
 import MissionAssignForm from './MissionAssignForm'
 import MissionEditForm from './MissionEditForm'
@@ -50,69 +62,92 @@ const statusColors: Record<
 
 interface MissionListProps {
   user: AuthUser
+  refreshKey?: number
 }
 
 /**
  * Display missions accessible to the authenticated user.
+ *
+ * Refreshes are performed without unmounting the mission cards.
+ * Laravel remains responsible for all authorization checks.
  */
-export default function MissionList({ user }: MissionListProps) {
+export default function MissionList({
+  user,
+  refreshKey = 0,
+}: MissionListProps) {
   const [missions, setMissions] = useState<Mission[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState('')
 
-  // Track the mission currently being started to prevent duplicate requests.
-  const [startingMissionId, setStartingMissionId] = useState<number | null>(null)
+  const requestId = useRef(0)
 
-  // Track the mission currently being completed to prevent duplicate requests.
-  const [completingMissionId, setCompletingMissionId] = useState<number | null>(null)
-
-  // Track the mission currently being edited.
-  const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
-
-  // Track the mission selected for cancellation.
+  const [startingMissionId, setStartingMissionId] = useState<number | null>(
+    null,
+  )
+  const [completingMissionId, setCompletingMissionId] = useState<number | null>(
+    null,
+  )
+  const [editingMissionId, setEditingMissionId] = useState<number | null>(
+    null,
+  )
   const [missionToCancel, setMissionToCancel] = useState<Mission | null>(null)
+  const [cancellingMissionId, setCancellingMissionId] = useState<
+    number | null
+  >(null)
 
-  // Track an ongoing cancellation request.
-  const [cancellingMissionId, setCancellingMissionId] = useState<number | null>(null)
-
+  /*
+   * Initial load and subsequent refresh signals.
+   *
+   * An updated refreshKey starts a background fetch.
+   * The existing cards remain visible throughout the request.
+   */
   useEffect(() => {
     let active = true
+    const currentRequest = ++requestId.current
 
-    async function loadMissions() {
-      try {
-        const response = await getMissions()
+    getMissions()
+      .then((response) => {
+        if (!active || currentRequest !== requestId.current) return
 
-        if (active) {
-          setMissions(response.data)
-        }
-      } catch (err) {
-        if (!active) return
+        setMissions(response.data)
+        setError('')
+      })
+      .catch((err) => {
+        if (!active || currentRequest !== requestId.current) return
 
         if (err instanceof AxiosError && err.response?.status === 401) {
           setError('Votre session a expiré. Veuillez vous reconnecter.')
         } else {
           setError('Impossible de charger les missions.')
         }
-      } finally {
-        if (active) {
-          setLoading(false)
-        }
-      }
-    }
+      })
+      .finally(() => {
+        if (!active || currentRequest !== requestId.current) return
 
-    void loadMissions()
+        setHasLoaded(true)
+        setLoading(false)
+      })
 
     return () => {
       active = false
     }
-  }, [])
+  }, [refreshKey])
 
   /**
-   * Start a pending mission assigned to the authenticated driver.
-   *
-   * Update the mission in local state after a successful API response
-   * to refresh its status without reloading the page.
+   * Replace a mission using the API's authoritative response.
    */
+  function replaceMission(updatedMission: Mission) {
+    // Invalidate any older list fetch that could overwrite this update.
+    requestId.current += 1
+
+    setMissions((currentMissions) =>
+      currentMissions.map((mission) =>
+        mission.id === updatedMission.id ? updatedMission : mission,
+      ),
+    )
+  }
+
   async function handleStartMission(id: number) {
     if (startingMissionId !== null) return
 
@@ -121,12 +156,7 @@ export default function MissionList({ user }: MissionListProps) {
 
     try {
       const updatedMission = await startMission(id)
-
-      setMissions((currentMissions) =>
-        currentMissions.map((mission) =>
-          mission.id === id ? updatedMission : mission
-        )
-      )
+      replaceMission(updatedMission)
     } catch (err) {
       if (err instanceof AxiosError && err.response?.status === 401) {
         setError('Votre session a expiré. Veuillez vous reconnecter.')
@@ -142,12 +172,6 @@ export default function MissionList({ user }: MissionListProps) {
     }
   }
 
-  /**
-   * Complete an in-progress mission assigned to the authenticated driver.
-   *
-   * Update the mission in local state after a successful API response
-   * to refresh its status without reloading the page.
-   */
   async function handleCompleteMission(id: number) {
     if (startingMissionId !== null || completingMissionId !== null) return
 
@@ -156,12 +180,7 @@ export default function MissionList({ user }: MissionListProps) {
 
     try {
       const updatedMission = await completeMission(id)
-
-      setMissions((currentMissions) =>
-        currentMissions.map((mission) =>
-          mission.id === id ? updatedMission : mission
-        )
-      )
+      replaceMission(updatedMission)
     } catch (err) {
       if (err instanceof AxiosError && err.response?.status === 401) {
         setError('Votre session a expiré. Veuillez vous reconnecter.')
@@ -177,62 +196,25 @@ export default function MissionList({ user }: MissionListProps) {
     }
   }
 
-  /**
-   * Enable completion after the backend confirms
-   * that a delivery proof has been registered.
-   */
   function handleDeliveryProofUploaded(missionId: number) {
     setMissions((currentMissions) =>
       currentMissions.map((mission) =>
         mission.id === missionId
           ? { ...mission, has_delivery_proof: true }
-          : mission
-      )
+          : mission,
+      ),
     )
   }
 
-  /**
-   * Update the mission list after a successful driver assignment.
-   *
-   * Replace the updated mission in local state without reloading
-   * the entire list from the Laravel API.
-   *
-   * @param updatedMission - The mission returned by the assignment API.
-   */
   function handleMissionAssigned(updatedMission: Mission) {
-    setMissions((currentMissions) =>
-      currentMissions.map((mission) =>
-        mission.id === updatedMission.id ? updatedMission : mission
-      )
-    )
+    replaceMission(updatedMission)
   }
 
-  /**
-   * Update the mission list after a successful edit.
-   *
-   * Replace the updated mission in local state and close
-   * the edit form without reloading the page.
-   *
-   * @param updatedMission - The mission returned by the update API.
-   */
   function handleMissionUpdated(updatedMission: Mission) {
-    setMissions((currentMissions) =>
-      currentMissions.map((mission) =>
-        mission.id === updatedMission.id ? updatedMission : mission
-      )
-    )
-
+    replaceMission(updatedMission)
     setEditingMissionId(null)
   }
 
-  /**
-   * Cancel a pending or in-progress mission after confirmation.
-   *
-   * The Laravel API validates the user's permissions and applies
-   * the CANCELLED status while preserving the mission record.
-   *
-   * Update the mission in local state after a successful response.
-   */
   async function handleCancelMission() {
     if (!missionToCancel || cancellingMissionId !== null) return
 
@@ -244,12 +226,7 @@ export default function MissionList({ user }: MissionListProps) {
     try {
       const updatedMission = await cancelMission(missionId)
 
-      setMissions((currentMissions) =>
-        currentMissions.map((mission) =>
-          mission.id === missionId ? updatedMission : mission
-        )
-      )
-
+      replaceMission(updatedMission)
       setMissionToCancel(null)
 
       if (editingMissionId === missionId) {
@@ -272,80 +249,296 @@ export default function MissionList({ user }: MissionListProps) {
     }
   }
 
-  if (loading) {
+  const isInitialLoading = !hasLoaded && loading
+
+  if (isInitialLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          py: 5,
+        }}
+      >
         <CircularProgress aria-label="Chargement des missions" />
       </Box>
     )
   }
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h6" component="h2">
-        {user.role === 'ADMIN'
-          ? 'Missions — supervision'
-          : 'Mes missions'}
-      </Typography>
+    <Stack spacing={3}>
+      {/* Heading */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+          }}
+        >
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+              bgcolor: '#E8F5F2',
+              color: '#00897B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <LocalShippingOutlinedIcon sx={{ fontSize: 27 }} />
+          </Box>
+
+          <Box>
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{ fontWeight: 700 }}
+            >
+              {user.role === 'ADMIN'
+                ? 'Missions — supervision'
+                : 'Mes missions'}
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary">
+              Suivi des transports et de leur avancement.
+            </Typography>
+          </Box>
+        </Box>
+
+        <Chip
+          variant="outlined"
+          label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`}
+          sx={{
+            color: '#00897B',
+            borderColor: '#B8DFD7',
+            fontWeight: 600,
+          }}
+        />
+      </Box>
+
+      {/* Reserve progress-bar height to avoid layout shifts */}
+      <Box sx={{ height: 3 }}>
+        {loading && <LinearProgress />}
+      </Box>
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      {!error && missions.length === 0 && (
-        <Alert severity="info">
-          Aucune mission à afficher pour le moment.
-        </Alert>
+      {missions.length === 0 && !error && (
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: 5,
+            px: 2,
+            bgcolor: '#F8FAFC',
+            border: '1px dashed #CBD5E1',
+            borderRadius: 2.5,
+          }}
+        >
+          <Inventory2OutlinedIcon
+            sx={{ fontSize: 36, color: '#94A3B8', mb: 1 }}
+          />
+
+          <Typography sx={{ fontWeight: 700 }}>
+            Aucune mission pour le moment
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary">
+            Les missions accessibles à votre compte apparaîtront ici.
+          </Typography>
+        </Box>
       )}
 
-      {!error &&
-        missions.map((mission) => (
-          <Paper
-            key={mission.id}
-            variant="outlined"
-            sx={{ p: 2.5, borderRadius: 2 }}
-          >
-            <Stack spacing={1.5}>
+      {missions.map((mission) => (
+        <Paper
+          key={mission.id}
+          variant="outlined"
+          sx={{
+            borderRadius: 2.5,
+            overflow: 'hidden',
+            bgcolor: '#FFFFFF',
+            transition: 'border-color 160ms, box-shadow 160ms',
+            '&:hover': {
+              borderColor: '#B8D9D3',
+              boxShadow: '0 8px 24px rgba(16, 38, 63, 0.05)',
+            },
+          }}
+        >
+          {/* Card heading */}
+          <Box sx={{ p: { xs: 2, sm: 3 }, pb: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: 2,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: 'secondary.main',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {mission.reference}
+                </Typography>
+
+                <Typography
+                  variant="h6"
+                  component="h4"
+                  sx={{
+                    fontWeight: 700,
+                    mt: 0.5,
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {mission.title}
+                </Typography>
+              </Box>
+
+              <Chip
+                label={statusLabels[mission.status]}
+                color={statusColors[mission.status]}
+                size="small"
+                sx={{ fontWeight: 600 }}
+              />
+            </Box>
+
+            {/* Route */}
+            <Box
+              sx={{
+                mt: 2.5,
+                p: 2,
+                bgcolor: '#F7FAFC',
+                borderRadius: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
               <Box
                 sx={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 1.5,
+                }}
+              >
+                <PlaceOutlinedIcon
+                  sx={{ color: '#00897B', fontSize: 21, mt: 0.2 }}
+                />
+
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    DÉPART
+                  </Typography>
+                  <Typography sx={{ overflowWrap: 'anywhere' }}>
+                    {mission.pickup_address}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1.5,
+                }}
+              >
+                <FlagOutlinedIcon
+                  sx={{ color: '#1E3A5F', fontSize: 21, mt: 0.2 }}
+                />
+
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    LIVRAISON
+                  </Typography>
+                  <Typography sx={{ overflowWrap: 'anywhere' }}>
+                    {mission.delivery_address}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            {/* Assignment and creator */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                mt: 2.5,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
                   alignItems: 'center',
-                  flexWrap: 'wrap',
                   gap: 1,
                 }}
               >
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {mission.title}
-                </Typography>
-
-                <Chip
-                  label={statusLabels[mission.status]}
-                  color={statusColors[mission.status]}
-                  size="small"
+                <PersonOutlineRoundedIcon
+                  sx={{ color: 'text.secondary', fontSize: 20 }}
                 />
+                <Typography variant="body2" color="text.secondary">
+                  Chauffeur :{' '}
+                  <Box
+                    component="span"
+                    sx={{ fontWeight: 600, color: 'text.primary' }}
+                  >
+                    {mission.driver?.name ?? 'Non affecté'}
+                  </Box>
+                </Typography>
               </Box>
 
-              <Typography variant="body2" color="text.secondary">
-                Référence : {mission.reference}
-              </Typography>
-
-              <Typography variant="body2">
-                Départ : {mission.pickup_address}
-              </Typography>
-
-              <Typography variant="body2">
-                Arrivée : {mission.delivery_address}
-              </Typography>
-
               {user.role === 'ADMIN' && (
-                <Typography variant="body2" color="text.secondary">
-                  Créée par : {mission.creator?.name ?? 'Utilisateur indisponible'}
-                </Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                >
+                  <EventOutlinedIcon
+                    sx={{ color: 'text.secondary', fontSize: 20 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Créée par :{' '}
+                    <Box
+                      component="span"
+                      sx={{ fontWeight: 600, color: 'text.primary' }}
+                    >
+                      {mission.creator?.name ?? 'Utilisateur indisponible'}
+                    </Box>
+                  </Typography>
+                </Box>
               )}
+            </Box>
+          </Box>
 
-              <Typography variant="body2" color="text.secondary">
-                Chauffeur : {mission.driver?.name ?? 'Non affecté'}
-              </Typography>
+          <Divider />
 
+          {/* Role-specific actions */}
+          <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack spacing={2}>
               {user.role === 'DRIVER' &&
                 mission.driver_id === user.id &&
                 mission.status === 'IN_PROGRESS' && (
@@ -361,12 +554,16 @@ export default function MissionList({ user }: MissionListProps) {
                   <MissionDocumentUpload
                     key={`upload-${mission.id}`}
                     missionId={mission.id}
-                    onUploadSuccess={() => handleDeliveryProofUploaded(mission.id)}
+                    onUploadSuccess={() =>
+                      handleDeliveryProofUploaded(mission.id)
+                    }
                   />
                 )}
 
+              {/* Delivery proofs are visible after mission completion. */}
               {user.role === 'DISPATCHER' &&
-                mission.created_by === user.id && (
+                mission.created_by === user.id &&
+                mission.status === 'COMPLETED' && (
                   <MissionDocumentsList
                     key={`documents-${mission.id}`}
                     missionId={mission.id}
@@ -384,9 +581,15 @@ export default function MissionList({ user }: MissionListProps) {
                         onCancel={() => setEditingMissionId(null)}
                       />
                     ) : (
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                        }}
+                      >
                         <Button
                           variant="outlined"
+                          startIcon={<EditOutlinedIcon />}
                           onClick={() => setEditingMissionId(mission.id)}
                         >
                           Modifier la mission
@@ -399,7 +602,12 @@ export default function MissionList({ user }: MissionListProps) {
               {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
                 (mission.status === 'PENDING' ||
                   mission.status === 'IN_PROGRESS') && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                    }}
+                  >
                     <Button
                       variant="outlined"
                       color="error"
@@ -411,10 +619,7 @@ export default function MissionList({ user }: MissionListProps) {
                   </Box>
                 )}
 
-              {(
-                user.role === 'ADMIN' ||
-                user.role === 'DISPATCHER'
-              ) &&
+              {(user.role === 'ADMIN' || user.role === 'DISPATCHER') &&
                 mission.status === 'PENDING' && (
                   <MissionAssignForm
                     mission={mission}
@@ -426,7 +631,13 @@ export default function MissionList({ user }: MissionListProps) {
                 mission.driver_id === user.id &&
                 (mission.status === 'PENDING' ||
                   mission.status === 'IN_PROGRESS') && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      pt: 1,
+                    }}
+                  >
                     {mission.status === 'PENDING' && (
                       <Button
                         variant="contained"
@@ -435,7 +646,9 @@ export default function MissionList({ user }: MissionListProps) {
                           completingMissionId !== null
                         }
                         loading={startingMissionId === mission.id}
-                        onClick={() => void handleStartMission(mission.id)}
+                        onClick={() =>
+                          void handleStartMission(mission.id)
+                        }
                       >
                         Démarrer la mission
                       </Button>
@@ -443,7 +656,12 @@ export default function MissionList({ user }: MissionListProps) {
 
                     {mission.status === 'IN_PROGRESS' && (
                       <Stack spacing={1.5} sx={{ width: '100%' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                          }}
+                        >
                           <Button
                             variant="contained"
                             color="success"
@@ -453,7 +671,9 @@ export default function MissionList({ user }: MissionListProps) {
                               mission.has_delivery_proof !== true
                             }
                             loading={completingMissionId === mission.id}
-                            onClick={() => void handleCompleteMission(mission.id)}
+                            onClick={() =>
+                              void handleCompleteMission(mission.id)
+                            }
                           >
                             Terminer la mission
                           </Button>
@@ -465,7 +685,8 @@ export default function MissionList({ user }: MissionListProps) {
                             color="text.secondary"
                             sx={{ textAlign: 'right' }}
                           >
-                            Déposez une preuve de livraison pour pouvoir terminer la mission.
+                            Déposez une preuve de livraison pour
+                            pouvoir terminer la mission.
                           </Typography>
                         )}
                       </Stack>
@@ -473,9 +694,11 @@ export default function MissionList({ user }: MissionListProps) {
                   </Box>
                 )}
             </Stack>
-          </Paper>
-        ))}
+          </Box>
+        </Paper>
+      ))}
 
+      {/* Cancellation confirmation */}
       <Dialog
         open={missionToCancel !== null}
         onClose={() => {
