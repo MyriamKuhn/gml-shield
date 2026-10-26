@@ -15,6 +15,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { getCurrentUser, login, logout, type AuthUser } from './api/auth'
 import MissionList from './components/missions/MissionList'
 import MissionCreateForm from './components/missions/MissionCreateForm'
+import AdminDashboard from './components/admin/AdminDashboard'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -92,7 +93,7 @@ function App() {
         bgcolor: 'background.default',
       }}
     >
-      <Container maxWidth="sm">
+      <Container maxWidth={user?.role === 'ADMIN' ? 'lg' : 'sm'}>
         <Paper
           elevation={0}
           sx={{
@@ -152,15 +153,21 @@ function App() {
                   </Typography>
                 </Box>
 
-                {(user.role === 'ADMIN' || user.role === 'DISPATCHER') && (
-                  <MissionCreateForm
-                    onMissionCreated={() => {
-                      setMissionRefreshKey((currentKey) => currentKey + 1)
-                    }}
-                  />
-                )}
+                {user.role === 'ADMIN' ? (
+                  <AdminDashboard user={user} />
+                ) : (
+                  <>
+                    {user.role === 'DISPATCHER' && (
+                      <MissionCreateForm
+                        onMissionCreated={() => {
+                          setMissionRefreshKey((currentKey) => currentKey + 1)
+                        }}
+                      />
+                    )}
 
-                <MissionList key={missionRefreshKey} user={user} />
+                    <MissionList key={missionRefreshKey} user={user} />
+                  </>
+                )}
 
                 {error && <Alert severity="error">{error}</Alert>}
 

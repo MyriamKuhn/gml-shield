@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MissionController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\UserController;
 
 // Public login endpoint with rate limiting.
 Route::post('/auth/login', [AuthController::class, 'login'])
@@ -22,6 +24,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // List drivers for mission assignment.
     // Role-based authorization is enforced by DriverController.
     Route::get('/drivers', [DriverController::class, 'index']);
+
+    // Read-only audit logs, restricted to active administrators.
+    Route::get('/audit-logs', [AuditLogController::class, 'index']);
+
+    // User administration, restricted to active administrators.
+    Route::get('/users', [UserController::class, 'index']);
+    // Create driver or dispatcher accounts (ADMIN only).
+    Route::post('/users', [UserController::class, 'store']);
+    // Activate or deactivate a driver or dispatcher account.
+    Route::patch('/users/{user}/active', [UserController::class, 'updateActive']);
 });
 
 // Mission management routes — authentication required.

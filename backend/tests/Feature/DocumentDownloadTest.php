@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
+use App\Jobs\RecordAuditLog;
+use Illuminate\Support\Facades\Bus;
 
 class DocumentDownloadTest extends TestCase
 {
@@ -209,5 +211,50 @@ class DocumentDownloadTest extends TestCase
                 "/api/missions/{$mission->id}/documents/{$document->id}"
             )
             ->assertNotFound();
+    }
+
+    public function test_authorized_download_dispatches_audit_event(): void
+    {
+        Bus::fake();
+
+        $dispatcher = $this->createUser(UserRole::DISPATCHER);
+        $mission = $this->createMission($dispatcher);
+        $document = $this->createDocument($mission);
+
+        $this->actingAs($dispatcher)
+            ->get("/api/missions/{$mission->id}/documents/{$document->id}")
+            ->assertOk()
+            ->assertDownload('delivery-proof-' . $document->id . '.pdf');
+
+        Bus::assertDispatched(
+            RecordAuditLog::class,
+            function (RecordAuditLog $job) use ($dispatcher): bool {
+                return $job->userId === $dispatcher->id
+                    && $job->action === 'DELIVERY_PROOF_DOWNLOADED'
+                    && $job->ipAddress !== null;
+            }
+        );
+    }
+
+    public function test_forbidden_download_does_not_dispatch_audit_event(): void
+    {
+        Bus::fake();
+
+        $owner = $this->createUser(UserRole::DISPATCHER);
+        $otherDispatcher = $this->createUser(UserRole::DISPATCHER);
+
+        $mission = $this->createMission($owner);
+        $document = $this->createDocument($mission);
+
+        $this->actingAs($otherDispatcher)
+            ->getJson("/api/missions/{$mission->id}/documents/{$document->id}")
+            ->assertForbidden();
+
+        Bus::assertNotDispatched(
+            RecordAuditLog::class,
+            function (RecordAuditLog $job): bool {
+                return $job->action === 'DELIVERY_PROOF_DOWNLOADED';
+            }
+        );
     }
 }
